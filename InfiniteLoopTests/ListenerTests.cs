@@ -94,6 +94,44 @@ namespace InfiniteLoopTests
             }
         }
 
+        [TestMethod]
+        public void TestAsSynchrounousCall()
+        {
+            // Arrange
+            var timer = new Stopwatch();
+            var callList = new List<(int, long)>();
+
+            IInstruction instruction = null;
+            var data = new Mock<IInstruction>();
+
+            var repeat = 2;
+            Func<bool> function = () => --repeat >= 0;
+
+            mockContinueListening.Setup(c => c.proceed()).Returns(function);
+            mockService.Setup(s => s.Notify()).Callback(() => callList.Add((1, timer.ElapsedMilliseconds))).Verifiable();
+            mockService.Setup(s => s.TryGetItem<IInstruction>()).Callback(() => callList.Add((2, timer.ElapsedMilliseconds))).Returns(data.Object);
+
+            InstructionListener listener = this.CreateListener();
+            listener.ReceivedInstruction += i =>
+            {
+                if (repeat == 1)
+                {
+                    Task.Delay(10000).Wait();
+                }
+            };
+
+            // Act
+            timer.Start();
+            listener.StartListeningAsync().GetAwaiter().GetResult();
+           
+            // Assert
+            foreach (var (type, time) in callList)
+            {
+                Debug.WriteLine($"call {type} @{time}ms");
+            }
+        }
+
+
 
         private InstructionListener CreateListener()
         {
